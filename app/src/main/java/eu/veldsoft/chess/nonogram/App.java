@@ -20,8 +20,8 @@ import org.apache.commons.math3.genetics.TournamentSelection;
 import org.apache.commons.math3.genetics.UniformCrossover;
 
 public class App {
-	private static final int GENERATIONS = 100000;
-	private static final int POPULATION = 51;
+	private static final int GENERATIONS = 10_000;
+	private static final int POPULATION = 71;
 
 	private static enum Cell {
 		EMPTY(' '), OCCUPIED('*'), KING('K'), QUEEN('Q'), ROOK('R'), BISHOP('B'), KNIGHT('N');
@@ -65,24 +65,26 @@ public class App {
 
 	private static final Random PRNG = new Random();
 
-	private static final Cell PIECES[] = { Cell.KING, Cell.QUEEN, Cell.ROOK, Cell.BISHOP, Cell.KNIGHT, };
+	private static final Cell PIECES_ARRAY[] = { Cell.KING, Cell.QUEEN, Cell.ROOK, Cell.BISHOP, Cell.KNIGHT, };
+
+	private static final List<Cell> PIECES_LIST = Arrays.asList(PIECES_ARRAY);
 
 	private static int[][] image = { {} };
 
-	private static Cell[][] board(List<Cell> cells, int[][] image) {
+	private static Cell[][] board(List<Cell> representation, int[][] image) {
 		Cell[][] board = new Cell[image.length][];
 
 		for (int i = 0, k = 0; i < image.length; i++) {
 			board[i] = new Cell[image[i].length];
 			for (int j = 0; j < image[i].length; j++, k++) {
-				board[i][j] = cells.get(k);
+				board[i][j] = representation.get(k);
 			}
 		}
 
 		return board;
 	}
 
-	private static int[][] beaten(List<Cell> cells, int[][] image) {
+	private static int[][] beaten(List<Cell> representation, int[][] image) {
 		int[][] counters = new int[image.length][];
 		for (int i = 0; i < image.length; i++) {
 			counters[i] = new int[image[i].length];
@@ -91,8 +93,7 @@ public class App {
 			}
 		}
 
-		Cell[][] board = board(cells, image);
-		List<Cell> pieces = Arrays.asList(PIECES);
+		Cell[][] board = board(representation, image);
 		for (int i = 0; i < board.length; i++) {
 			for (int j = 0; j < board[i].length; j++) {
 				if (board[i][j] == Cell.EMPTY) {
@@ -117,7 +118,7 @@ public class App {
 							continue;
 						}
 
-						if (pieces.contains(board[i + step.dx][j + step.dy])) {
+						if (PIECES_LIST.contains(board[i + step.dx][j + step.dy])) {
 							break;
 						}
 
@@ -133,17 +134,21 @@ public class App {
 		return counters;
 	}
 
-	private static int fitness(List<Cell> cells, int[][] image) {
-		int[][] counters = beaten(cells, image);
-		Cell[][] board = board(cells, image);
+	private static int fitness(List<Cell> representation, int[][] image) {
+		int[][] counters = beaten(representation, image);
+		Cell[][] board = board(representation, image);
 
 		int score = 0;
-		final int BAD = -10;
-		final int GOOD = +100;
+		final int BAD = -100;
+		final int GOOD = +10;
+		final int BEST = +100;
 		final int UNDERBEATEN = -5;
 		for (int i = 0; i < counters.length; i++) {
 			for (int j = 0; j < counters[i].length; j++) {
-				if (counters[i][j] >= 2 && board[i][j] == Cell.OCCUPIED) {
+				if (counters[i][j] == 2 && board[i][j] == Cell.OCCUPIED) {
+					score += BEST;
+				}
+				if (counters[i][j] > 2 && board[i][j] == Cell.OCCUPIED) {
 					score += GOOD;
 				}
 				if (counters[i][j] < 2 && board[i][j] == Cell.OCCUPIED) {
@@ -158,30 +163,79 @@ public class App {
 		return score;
 	}
 
-	private static List<Cell> random(int[][] image, double threshold) {
-		List<Cell> cells = new ArrayList<>();
+	private static boolean hitting(int x, int y, Cell piece, int[][] image) {
+		for (List<Cell.Step> directions : piece.steps()) {
+			for (Cell.Step step : directions) {
+				if (x + step.dx < 0) {
+					continue;
+				}
+				if (x + step.dx >= image.length) {
+					continue;
+				}
+				if (y + step.dy < 0) {
+					continue;
+				}
+				if (y + step.dy >= image[x].length) {
+					continue;
+				}
 
-		for (int i = 0; i < image.length; i++) {
-			for (int j = 0; j < image[i].length; j++) {
-				if (image[i][j] == 1) {
-					cells.add(Cell.OCCUPIED);
-				} else if (PRNG.nextDouble() < (1D - threshold)) {
-					cells.add(Cell.EMPTY);
-				} else {
-					cells.add(PIECES[PRNG.nextInt(PIECES.length)]);
+				if (image[x + step.dx][y + step.dy] == 1) {
+					return true;
 				}
 			}
 		}
 
-		return cells;
+		return false;
 	}
 
-	private static void print(List<Cell> cells, int[][] image) {
-		int[][] counters = beaten(cells, image);
+	private static List<Cell> random(int[][] image, double threshold) {
+		List<Cell> representation = new ArrayList<>();
+
+		for (int i = 0; i < image.length; i++) {
+			for (int j = 0; j < image[i].length; j++) {
+				if (image[i][j] == 1) {
+					representation.add(Cell.OCCUPIED);
+				} else {
+					Cell piece = PIECES_ARRAY[PRNG.nextInt(PIECES_ARRAY.length)];
+					if (hitting(i, j, piece, image) && PRNG.nextDouble() < threshold) {
+						representation.add(piece);
+					} else {
+						representation.add(Cell.EMPTY);
+					}
+				}
+			}
+		}
+
+		return representation;
+	}
+
+	private static List<Cell> filter(List<Cell> representation, int[][] image) {
+		List<Cell> result = new ArrayList<>();
+		Cell[][] board = board(representation, image);
+
 		for (int i = 0, k = 0; i < image.length; i++) {
 			for (int j = 0; j < image[i].length; j++, k++) {
-				System.out.print("[" + cells.get(k).symbol() + ""
-						+ (counters[i][j] > 1 ? String.format("%2d", counters[i][j]) : "  ") + "]");
+				if (PIECES_LIST.contains(board[i][j]) == true && hitting(i, j, board[i][j], image) == false) {
+					result.add(Cell.EMPTY);
+				} else {
+					result.add(representation.get(k));
+				}
+			}
+		}
+
+		return result;
+	}
+
+	private static void print(boolean debug, List<Cell> representation, int[][] image) {
+		int[][] counters = beaten(representation, image);
+		for (int i = 0, k = 0; i < image.length; i++) {
+			for (int j = 0; j < image[i].length; j++, k++) {
+				if (debug == true) {
+					System.out.print("[" + representation.get(k).symbol() + ""
+							+ (counters[i][j] > 1 ? String.format("%2d", counters[i][j]) : "  ") + "]");
+				} else {
+					System.out.print(representation.get(k).symbol());
+				}
 			}
 			System.out.println();
 		}
@@ -232,7 +286,7 @@ public class App {
 	public static void main(String[] args) throws IOException {
 //		args = new String[] { "C:\\Users\\Todor Balabanov\\Desktop\\1.txt",
 //				"C:\\Users\\Todor Balabanov\\Desktop\\2.txt" };
-
+//
 		List<int[]> rows = new ArrayList<>();
 		try (BufferedReader reader = new BufferedReader(new FileReader(args[0]))) {
 			String line;
@@ -409,9 +463,8 @@ public class App {
 
 			@Override
 			public CellChromosome newFixedLengthChromosome(List<Cell> representation) {
-				representation = new ArrayList<>(representation);
-				// Collections.shuffle(representation);
-				return new CellChromosome(representation);
+				// return new CellChromosome(random(image, 0.01));
+				return new CellChromosome(new ArrayList<>(representation));
 			}
 
 			@Override
@@ -428,7 +481,7 @@ public class App {
 				int index = PRNG.nextInt(representation.size());
 				if (representation.get(index) != Cell.OCCUPIED) {
 					if (PRNG.nextDouble() < 0.5D) {
-						Cell cell = PIECES[PRNG.nextInt(PIECES.length)];
+						Cell cell = PIECES_ARRAY[PRNG.nextInt(PIECES_ARRAY.length)];
 						representation.set(index, cell);
 					} else {
 						representation.set(index, Cell.EMPTY);
@@ -441,14 +494,16 @@ public class App {
 
 		List<Chromosome> chromosomes = new ArrayList<Chromosome>();
 		for (int i = 0; i < POPULATION; i++) {
-			List<Cell> representation = random(image, 0.3);
+			List<Cell> representation = random(image, 0.01);
 			chromosomes.add(new CellChromosome(representation));
 		}
 
 		Chromosome fittest = ga.evolve(new ElitisticListPopulation(chromosomes, chromosomes.size() * 2, 0.05),
 				new FixedGenerationCount(GENERATIONS)).getFittestChromosome();
 
-		print(((CellChromosome) fittest).representation(), image);
-		System.out.println(fitness(((CellChromosome) fittest).representation(), image));
+		List<Cell> representation = ((CellChromosome) fittest).representation();
+		filter(representation, image);
+		System.out.println(fitness(representation, image));
+		print(true, representation, image);
 	}
 }
