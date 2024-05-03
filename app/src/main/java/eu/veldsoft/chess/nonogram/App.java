@@ -124,11 +124,17 @@ public class App {
 							continue;
 						}
 
+						/* Stop direction of piece influence if it hits another piece. */
 						if (PIECES_LIST.contains(board[i + step.dx][j + step.dy])) {
 							break;
 						}
 
 						counters[i + step.dx][j + step.dy]++;
+
+						/* Stop direction of piece influence if it hits an occupied cell. */
+						if (board[i + step.dx][j + step.dy] == Cell.OCCUPIED) {
+							break;
+						}
 					}
 				}
 			}
@@ -645,9 +651,11 @@ public class App {
 			@Override
 			public CellChromosome newFixedLengthChromosome(List<Cell> representation) {
 				// return new CellChromosome(emptyOnly(image));
-				// return new CellChromosome(random(image, 0.01));
-				return new CellChromosome(randomSearch(image, 10_000));
-				// return new CellChromosome(new ArrayList<>(representation));
+				// return new CellChromosome(randomOnly(image, 0.01));
+				// return new CellChromosome(randomSearch(image, 10_000));
+				// return new CellChromosome(removeHarmful(representation, image));
+				// return new CellChromosome(removeHarmful(randomOnly(image, 0.1), image));
+				return new CellChromosome(new ArrayList<>(representation));
 			}
 
 			@Override
@@ -673,12 +681,12 @@ public class App {
 
 				return new CellChromosome(representation);
 			}
-		}, 0.01, new TournamentSelection(3));
+		}, 0.1, new TournamentSelection(5));
 
 		List<Chromosome> chromosomes = new ArrayList<Chromosome>();
-		for (int i = 0; i < POPULATION; i++) {
+		chromosomes.add(new CellChromosome(randomSearch(image, 100_000)));
+		for (int i = 1; i < POPULATION; i++) {
 			List<Cell> representation = randomOnly(image, 0.09);
-			// List<Cell> representation = randomSearch(image, 10_000);
 			chromosomes.add(new CellChromosome(representation));
 		}
 
