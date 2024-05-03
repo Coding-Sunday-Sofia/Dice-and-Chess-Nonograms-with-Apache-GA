@@ -22,7 +22,7 @@ import org.apache.commons.math3.genetics.TournamentSelection;
 import org.apache.commons.math3.genetics.UniformCrossover;
 
 public class App {
-	private static final int GENERATIONS = 100_000;
+	private static final int GENERATIONS = 10_000;
 	private static final int POPULATION = 83;
 
 	private static enum Cell {
@@ -134,9 +134,6 @@ public class App {
 			}
 		}
 
-//		System.err.println(Arrays.deepToString(counters).replace("],", "\n").replace("[", "").replace("]", "")
-//				.replace(" ", "").replace(",", " "));
-//		System.err.println(score);
 		return counters;
 	}
 
@@ -206,7 +203,23 @@ public class App {
 		return false;
 	}
 
-	private static List<Cell> random(int[][] image, double threshold) {
+	private static List<Cell> emptyOnly(int[][] image) {
+		List<Cell> representation = new ArrayList<>();
+
+		for (int i = 0; i < image.length; i++) {
+			for (int j = 0; j < image[i].length; j++) {
+				if (image[i][j] == 1) {
+					representation.add(Cell.OCCUPIED);
+				} else {
+					representation.add(Cell.EMPTY);
+				}
+			}
+		}
+
+		return representation;
+	}
+
+	private static List<Cell> randomOnly(int[][] image, double threshold) {
 		List<Cell> representation = new ArrayList<>();
 
 		for (int i = 0; i < image.length; i++) {
@@ -222,6 +235,34 @@ public class App {
 					}
 				}
 			}
+		}
+
+		return representation;
+	}
+
+	private static List<Cell> randomSearch(int[][] image, int limit) {
+		List<Cell> representation = new ArrayList<>();
+
+		for (int i = 0; i < image.length; i++) {
+			for (int j = 0; j < image[i].length; j++) {
+				if (image[i][j] == 1) {
+					representation.add(Cell.OCCUPIED);
+				} else {
+					representation.add(Cell.EMPTY);
+				}
+			}
+		}
+
+		for (int l = 0; l < limit && unbeaten(representation, image) > 0; l++) {
+			int index = -1;
+			do {
+				index = PRNG.nextInt(representation.size());
+			} while (representation.get(index) != Cell.EMPTY);
+
+			Cell cell = PIECES_ARRAY[PRNG.nextInt(PIECES_ARRAY.length)];
+			representation.set(index, cell);
+			representation = removeUnused(representation, image);
+			representation = removeHarmful(representation, image);
 		}
 
 		return representation;
@@ -359,39 +400,10 @@ public class App {
 		return sum;
 	}
 
-	private static List<Cell> chess(int[][] image) {
-		List<Cell> representation = new ArrayList<>();
-
-		for (int i = 0; i < image.length; i++) {
-			for (int j = 0; j < image[i].length; j++) {
-				if (image[i][j] == 1) {
-					representation.add(Cell.OCCUPIED);
-				} else {
-					representation.add(Cell.EMPTY);
-				}
-			}
-		}
-
-		do {
-			int index = -1;
-			do {
-				index = PRNG.nextInt(representation.size());
-			} while (representation.get(index) != Cell.EMPTY);
-
-			Cell cell = PIECES_ARRAY[PRNG.nextInt(PIECES_ARRAY.length)];
-
-			representation.set(index, cell);
-			representation = removeUnused(representation, image);
-			representation = removeHarmful(representation, image);
-		} while (unbeaten(representation, image) > 0);
-
-		return representation;
-	}
-
 	public static void main(String[] args) throws IOException {
 //		args = new String[] { "C:\\Users\\Todor Balabanov\\Desktop\\Icons-32x32-03-May-2024\\01.bin",
 //				"C:\\Users\\Todor Balabanov\\Desktop\\Icons-32x32-03-May-2024\\01.chess" };
-
+//
 		List<int[]> rows = new ArrayList<>();
 		try (BufferedReader reader = new BufferedReader(new FileReader(args[0]))) {
 			String line;
@@ -412,13 +424,15 @@ public class App {
 			}
 		}
 
-		/*
-		 * int[][] board = dice(image); try (PrintStream out = new PrintStream(new
-		 * FileOutputStream(args[1]))) {
-		 * out.println(Arrays.deepToString(board).replace("],", "\n").replace("[",
-		 * "").replace("]", "") .replace(" ", "").replace(",", "")); out.close(); }
-		 * System.exit(0); /
-		 */
+		/* Dice brute force. */ {
+//			int[][] board = dice(image);
+//			try (PrintStream out = new PrintStream(new FileOutputStream(args[1]))) {
+//				out.println(Arrays.deepToString(board).replace("],", "\n").replace("[", "").replace("]", "")
+//						.replace(" ", "").replace(",", ""));
+//				out.close();
+//			}
+//			System.exit(0);
+		}
 
 		List<Cell.Step> direction = null;
 		List<List<Cell.Step>> steps = null;
@@ -603,12 +617,17 @@ public class App {
 
 		Cell.QUEEN.steps(steps);
 
-		/*
-		 * List<Cell> board = chess(image); print(System.out, true, board, image);
-		 * Cell.EMPTY.symbol('.'); Cell.OCCUPIED.symbol('.'); try (PrintStream out = new
-		 * PrintStream(new FileOutputStream(args[1]))) { print(out, false, board,
-		 * image); out.close(); } System.exit(0); /
-		 */
+		/* Only random search try. */ {
+//			List<Cell> representation = randomSearch(image, 100_000);
+//			print(System.out, true, representation, image);
+//			Cell.EMPTY.symbol('.');
+//			Cell.OCCUPIED.symbol('.');
+//			try (PrintStream out = new PrintStream(new FileOutputStream(args[1]))) {
+//				print(out, false, representation, image);
+//				out.close();
+//			}
+//			System.exit(0);
+		}
 
 		class CellChromosome extends AbstractListChromosome<Cell> {
 			@Override
@@ -625,8 +644,10 @@ public class App {
 
 			@Override
 			public CellChromosome newFixedLengthChromosome(List<Cell> representation) {
+				// return new CellChromosome(emptyOnly(image));
 				// return new CellChromosome(random(image, 0.01));
-				return new CellChromosome(new ArrayList<>(representation));
+				return new CellChromosome(randomSearch(image, 10_000));
+				// return new CellChromosome(new ArrayList<>(representation));
 			}
 
 			@Override
@@ -656,7 +677,8 @@ public class App {
 
 		List<Chromosome> chromosomes = new ArrayList<Chromosome>();
 		for (int i = 0; i < POPULATION; i++) {
-			List<Cell> representation = random(image, 0.09);
+			List<Cell> representation = randomOnly(image, 0.09);
+			// List<Cell> representation = randomSearch(image, 10_000);
 			chromosomes.add(new CellChromosome(representation));
 		}
 
