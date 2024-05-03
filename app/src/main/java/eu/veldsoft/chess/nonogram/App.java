@@ -20,8 +20,8 @@ import org.apache.commons.math3.genetics.TournamentSelection;
 import org.apache.commons.math3.genetics.UniformCrossover;
 
 public class App {
-	private static final int GENERATIONS = 10_000;
-	private static final int POPULATION = 71;
+	private static final int GENERATIONS = 100_000;
+	private static final int POPULATION = 83;
 
 	private static enum Cell {
 		EMPTY(' '), OCCUPIED('*'), KING('K'), QUEEN('Q'), ROOK('R'), BISHOP('B'), KNIGHT('N');
@@ -52,6 +52,10 @@ public class App {
 
 		char symbol() {
 			return symbol;
+		}
+
+		void symbol(char symbol) {
+			this.symbol = symbol;
 		}
 
 		void steps(List<List<Step>> steps) {
@@ -139,10 +143,10 @@ public class App {
 		Cell[][] board = board(representation, image);
 
 		int score = 0;
-		final int BAD = -100;
-		final int GOOD = +10;
+		final int BAD = -300;
+		final int GOOD = +50;
 		final int BEST = +100;
-		final int UNDERBEATEN = -5;
+		final int UNDERBEATEN = -10;
 		for (int i = 0; i < counters.length; i++) {
 			for (int j = 0; j < counters[i].length; j++) {
 				if (counters[i][j] == 2 && board[i][j] == Cell.OCCUPIED) {
@@ -209,7 +213,7 @@ public class App {
 		return representation;
 	}
 
-	private static List<Cell> filter(List<Cell> representation, int[][] image) {
+	private static List<Cell> removeUnused(List<Cell> representation, int[][] image) {
 		List<Cell> result = new ArrayList<>();
 		Cell[][] board = board(representation, image);
 
@@ -219,6 +223,52 @@ public class App {
 					result.add(Cell.EMPTY);
 				} else {
 					result.add(representation.get(k));
+				}
+			}
+		}
+
+		return result;
+	}
+
+	private static List<Cell> removeHarmful(List<Cell> representation, int[][] image) {
+		List<Cell> result = new ArrayList<>();
+		int[][] counters = beaten(representation, image);
+
+		for (int i = 0, k = 0; i < image.length; i++) {
+			for (int j = 0; j < image[i].length; j++, k++) {
+				if (PIECES_LIST.contains(representation.get(k)) == false) {
+					result.add(representation.get(k));
+					continue;
+				}
+
+				boolean isHarmful = false;
+
+				done: for (List<Cell.Step> directions : representation.get(k).steps()) {
+					for (Cell.Step step : directions) {
+						if (i + step.dx < 0) {
+							continue;
+						}
+						if (i + step.dx >= counters.length) {
+							continue;
+						}
+						if (j + step.dy < 0) {
+							continue;
+						}
+						if (j + step.dy >= counters[i].length) {
+							continue;
+						}
+
+						if (image[i + step.dx][j + step.dy] == 0 && counters[i + step.dx][j + step.dy] > 1) {
+							isHarmful = true;
+							break done;
+						}
+					}
+				}
+
+				if (isHarmful == false) {
+					result.add(representation.get(k));
+				} else {
+					result.add(Cell.EMPTY);
 				}
 			}
 		}
@@ -284,8 +334,8 @@ public class App {
 	}
 
 	public static void main(String[] args) throws IOException {
-//		args = new String[] { "C:\\Users\\Todor Balabanov\\Desktop\\1.txt",
-//				"C:\\Users\\Todor Balabanov\\Desktop\\2.txt" };
+//		args = new String[] { "C:\\Users\\Todor Balabanov\\Desktop\\Icons-32x32-03-May-2024\\01.bin",
+//				"C:\\Users\\Todor Balabanov\\Desktop\\Icons-32x32-03-May-2024\\01.txt" };
 //
 		List<int[]> rows = new ArrayList<>();
 		try (BufferedReader reader = new BufferedReader(new FileReader(args[0]))) {
@@ -494,7 +544,7 @@ public class App {
 
 		List<Chromosome> chromosomes = new ArrayList<Chromosome>();
 		for (int i = 0; i < POPULATION; i++) {
-			List<Cell> representation = random(image, 0.01);
+			List<Cell> representation = removeHarmful(removeUnused(random(image, 0.01), image), image);
 			chromosomes.add(new CellChromosome(representation));
 		}
 
@@ -502,8 +552,11 @@ public class App {
 				new FixedGenerationCount(GENERATIONS)).getFittestChromosome();
 
 		List<Cell> representation = ((CellChromosome) fittest).representation();
-		filter(representation, image);
+		representation = removeUnused(representation, image);
 		System.out.println(fitness(representation, image));
 		print(true, representation, image);
+		Cell.EMPTY.symbol('.');
+		Cell.OCCUPIED.symbol('.');
+		print(false, representation, image);
 	}
 }
